@@ -1,6 +1,5 @@
 module Cursors where
 
-import Control.Monad.Except
 import Control.Monad.State
 import qualified Data.Sequence as S
 
@@ -80,7 +79,7 @@ getCursorAt i = do
   cs <- getCursors
   case cs S.!? i of
     Just c -> return c
-    Nothing -> throwError ("No cursor at position " ++ show i)
+    Nothing -> error ("No cursor at position " ++ show i)
 
 -- | Get the current cursor
 getCursor :: Eval Cursor
@@ -113,6 +112,108 @@ getAnchorIdxs = foldMap f
   where
     f (CursPos Nothing _) = [Nothing]
     f (CursPos (Just (i,_)) _) = [Just i]
+
+-- | Get minimum point of cursor
+getMin :: Cursor -> BufIdx
+getMin c = foldr f maxBound c
+  where
+    f (CursPos Nothing (i,_)) b = min i b
+    f (CursPos (Just (i,_)) (j,_)) b = min (min i b) j
+
+-- | Get maximum point of cursor
+getMax :: Cursor -> BufIdx
+getMax c = foldr f 0 c
+  where
+    f (CursPos Nothing (i,_)) b = max i b
+    f (CursPos (Just (i,_)) (j,_)) b = max (max i b) j
+
+-- | Sort cursor by closest to top left corner
+sortTop :: Cursor -> Cursor
+sortTop c = S.sortBy f c
+  where
+    f (CursPos Nothing (i,_)) (CursPos Nothing (j,_))
+      | i < j = LT
+      | i > j = GT
+      | i == j = EQ
+    f (CursPos Nothing (i,_)) c =
+      let
+        Just (j,k) = toRange c
+      in
+        if i < j then
+          LT
+        else if i > j then
+          GT
+        else
+          EQ
+    f c (CursPos Nothing (i,_)) =
+      let
+        Just (j,_) = toRange c
+      in
+        if i < j then
+          GT
+        else if i > j then
+          LT
+        else
+          EQ
+    f c c' =
+      let
+        Just (i,j) = toRange c
+        Just (k,l) = toRange c
+      in
+        if i < k then
+          LT
+        else if i > k then
+          GT
+        else if j < l then
+          LT
+        else if j > l then
+          GT
+        else
+          EQ
+
+-- | Sort by closest to bottom right corner
+sortBottom :: Cursor -> Cursor
+sortBottom c = S.reverse $ S.sortBy f c
+  where
+    f (CursPos Nothing (i,_)) (CursPos Nothing (j,_))
+      | i < j = LT
+      | i > j = GT
+      | i == j = EQ
+    f (CursPos Nothing (i,_)) c =
+      let
+        Just (j,k) = toRange c
+      in
+        if i < k then
+          LT
+        else if i > k then
+          GT
+        else
+          EQ
+    f c (CursPos Nothing (i,_)) =
+      let
+        Just (j,k) = toRange c
+      in
+        if i < k then
+          GT
+        else if i > k then
+          LT
+        else
+          EQ
+    f c c' =
+      let
+        Just (i,j) = toRange c
+        Just (k,l) = toRange c
+      in
+        if j < l then
+          LT
+        else if j > l then
+          GT
+        else if i < k then
+          LT
+        else if i > k then
+          GT
+        else
+          EQ
 
 -- | Eliminate overlap in a cursor
 overlap :: Cursor -> Cursor

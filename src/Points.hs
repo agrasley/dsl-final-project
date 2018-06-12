@@ -2,7 +2,6 @@
 
 module Points where
 
-import Control.Monad.Except
 import Control.Monad.State
 import qualified Data.Sequence as S
 
@@ -13,7 +12,7 @@ checkBounds p = do
   b <- gets buffer
   i <- toIdxM p
   if i > S.length b then
-    throwError ("Position " ++ show p ++ " out of bounds")
+    error ("Position " ++ show p ++ " out of bounds")
   else
     return ()
 
@@ -33,27 +32,40 @@ getYM p = toPtM p >>= return . snd
 idxToPt :: BufIdx -> Buffer -> Point
 idxToPt idx buf = (x,y)
   where
-    x = length $ S.drop (head idxs + 1) before
-    y = length idxs
-    idxs = S.elemIndicesR '\n' before
-    before = S.take idx buf
+    x = case newlines of
+      [] -> idx
+      _  -> idx - (1 + head newlines)
+
+    y :: Int
+    y = length newlines
+
+    newlines :: [BufIdx]
+    newlines = S.elemIndicesR '\n' textBefore
+
+    textBefore :: Text
+    textBefore = S.take idx buf
 
 -- | Convert a 2D point to an index of the buffer
 ptToIdx :: Point -> Buffer -> BufIdx
-ptToIdx (x,y) buf | x < end - start = start + x
-                  | otherwise       = end
+ptToIdx (x,y) buf | x > end - start = end
+                  | otherwise       = start + x
   where
-    len = S.length buf
-    lidxs = length idxs
-    start = if y >= lidxs then
-        last idxs
+    start :: BufIdx
+    start = if y == 0 then
+        0
+      else if y >= length newlines then
+        last newlines + 1
       else
-        (idxs !! y-1) + 1
-    end = if y >= lidxs then
-        len
+        (newlines !! y-1) + 1
+
+    end :: BufIdx
+    end = if y >= length newlines then
+        S.length buf
       else
-        idxs !! y
-    idxs = S.elemIndicesL '\n' buf
+        newlines !! y
+
+    newlines :: [BufIdx]
+    newlines = S.elemIndicesL '\n' buf
 
 class Pos a where
   toIdx :: a -> Buffer -> BufIdx

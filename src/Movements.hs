@@ -116,13 +116,6 @@ safeMoveAnchor m = do
         foldr f S.empty z
     f (cp,(CursPos _ x)) cs = (CursPos (Just cp) x) S.<| cs
 
-
-{-
-shift :: Mvmt -> Eval Bool
-shift m = do
-  c <- getCursor
--}
-
 -- * Smart constructors
 
 -- | Move right smart constructor
@@ -161,18 +154,25 @@ search = Search
 match :: SDir -> String -> Mvmt
 match = Match
 
+wordStart :: String
+wordStart = "\\W\\b"
+
+wordEnd :: String
+wordEnd = "\\b"
+
 
 movePrim :: CursPt -> Mvmt -> Buffer -> Maybe (CursPt)
 movePrim (idx,maxX) (Move U i) b | y == 0    = Nothing
                                  | y - i < 0 = Just (toIdx ((maxX,0)::Point) b,maxX)
                                  | otherwise = Just (toIdx (maxX,y-i) b,maxX)
                                    where
-                                     (x,y) = toPt idx b
-movePrim (idx,maxX) (Move D i) b | idx' == idx = Nothing
-                                 | otherwise   = Just (idx',maxX)
+                                     y = getY idx b
+movePrim (idx,maxX) (Move D i) b | y == numNl = Nothing
+                                 | y+i > numNl = Just (toIdx (maxX,numNl) b,maxX)
+                                 | otherwise   = Just (toIdx (maxX,y+i) b,maxX)
                                    where
-                                     (x,y) = toPt idx b
-                                     idx'  = toIdx (maxX,y+i) b
+                                     numNl = length $ S.elemIndicesL '\n' b
+                                     y = getY idx b
 movePrim (idx,maxX) (Move L i) b | x == 0    = Nothing
                                  | x - i < 0 = Just (toIdx ((0,y)::Point) b,0)
                                  | otherwise = Just (toIdx (x-i,y) b,x-i)
@@ -183,66 +183,43 @@ movePrim (idx,maxX) (Move R i) b | idx' == idx = Nothing
                                    where
                                      (x,y) = toPt idx b
                                      idx'  = toIdx (x+i,y) b
-                                     (x',_) = toPt idx' b
+                                     x'    = getX idx' b
 movePrim (idx,_) (Search Forw re) b =
-  case matches of
-    [] -> Nothing
-    xs -> Just (idx',getX idx' b)
+  if fst match < 0 then
+    Nothing
+  else
+    Just (idx',getX idx' b)
   where
-    idx' = idx+getOffset matches
+    idx' = idx+fst match
 
-    matches :: [(MatchOffset, MatchLength)]
-    matches = getAllSubmatches $ S.drop idx b =~ re
-
-    getOffset ((o,_):xs) = go o xs
-
-    go o ((o',0):xs) = go o' xs
-    go o (x:xs) = go o xs
-    go o [] = o
+    match :: (MatchOffset, MatchLength)
+    match = S.drop idx b =~ re
 movePrim (idx,_) (Search Back re) b =
   case matches of
     [] -> Nothing
     xs -> Just (idx',getX idx' b)
   where
-    idx' = getOffset matches
+    idx' = fst . last $ matches
 
     matches :: [(MatchOffset, MatchLength)]
-    matches = A.elems $ last ((S.take idx b =~ re) :: [MatchArray])
-
-    getOffset ((o,_):xs) = go o xs
-
-    go o ((o',0):xs) = go o' xs
-    go o (x:xs) = go o xs
-    go o [] = o
+    matches = getAllMatches $ (S.take idx b) =~ re
 movePrim (idx,_) (Match Forw re) b =
-  case matches of
-    [] -> Nothing
-    ((0,_):_) -> Just (idx',getX idx' b)
-    xs -> Nothing
+  if fst match == 0 then
+    Just (idx',getX idx' b)
+  else
+    Nothing
   where
-    idx' = idx+getOffset matches
+    idx' = idx+snd match
 
-    matches :: [(MatchOffset, MatchLength)]
-    matches = getAllSubmatches $ S.drop idx b =~ re
-
-    getOffset ((o,l):xs) = go l xs
-
-    go o ((o',0):xs) = go o' xs
-    go o (x:xs) = go o xs
-    go o [] = o
+    match :: (MatchOffset, MatchLength)
+    match = S.drop idx b =~ re
 movePrim (idx,_) (Match Back re) b =
-  case matches of
-    [] -> Nothing
-    ((0,_):_) -> Just (idx',getX idx' b)
-    xs -> Nothing
+  if fst match == 0 then
+    Just (idx',getX idx' b)
+  else
+    Nothing
   where
-    idx' = idx-getOffset matches
+    idx' = idx-snd match
 
-    matches :: [(MatchOffset, MatchLength)]
-    matches = getAllSubmatches $ S.reverse (S.take idx b) =~ re
-
-    getOffset ((o,l):xs) = go l xs
-
-    go o ((o',0):xs) = go o' xs
-    go o (x:xs) = go o xs
-    go o [] = o
+    match :: (MatchOffset, MatchLength)
+    match = S.reverse (S.take idx b) =~ re

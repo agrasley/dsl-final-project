@@ -1,12 +1,14 @@
 module Actions where
 
-import Control.Monad.State (modify)
-import Data.List (sortBy)
+import Control.Monad.State (gets,modify)
+import Data.List (sort,sortBy,intersperse)
+import Data.Maybe
 import qualified Data.Sequence as S
 
 import Points
 import Types
 import Cursors
+import Movements
 
 -- * Selection
 
@@ -35,6 +37,26 @@ insert t = do
   c <- getCursor
   modify (insertPrim (getActiveIdxs c) t)
 
+-- * Deletion
+
+delete :: Mvmt -> Eval Bool
+delete m = do
+    c <- getCursor
+    b <- gets buffer
+    let moves = fmap (\x -> fmap fst (movePrim x m b)) (getActives c)
+    let z = catMaybes $ zipWith f moves (getActiveIdxs c)
+    case z of
+      [] -> return False
+      _  -> do
+        modify (deletePrim z)
+        return True
+  where
+    f Nothing _ = Nothing
+    f (Just i) j | i < j = Just (i,j)
+                 | otherwise = Just (j,i)
+
+
+
 
 {-
 Basic actions
@@ -58,16 +80,32 @@ adjustCursPos p len b (CursPos (Just (i,maxX)) (j,maxX'))
       jp' = (j',getX j' b)
       k = toIdx p b
 
-adjustAfter :: Pos a => a -> Int -> State -> State
-adjustAfter p len (State c b cs) = State c b (fmap (fmap (adjustCursPos p len b)) cs)
+adjustAfter :: BufIdx -> Int -> State -> State
+adjustAfter i len (State c b cs) = State c b (fmap (fmap (adjustCursPos p len b)) cs)
+
+insertBuf :: Pos a => [a] -> Text -> Buffer -> Buffer
+insertBuf ps t b = mconcat $ intersperse t bs
+  where
+    is :: [BufIdx]
+    is = sort (fmap (\p -> toIdx p b) ps)
+
+    bs :: [Text]
+    bs = foldr (\i bs -> let
+                      (x,y) = S.splitAt i (head bs)
+                    in
+                      (x:y:tail bs)
+          ) [b] is
+
 
 insertPrim :: Pos a => [a] -> Text -> State -> State
 insertPrim [] _ st = st
-insertPrim (p:ps) t (State c b cs) = st'
+insertPrim (p:ps) t (State c b cs) = insertPrim ps t st'
   where
-    (l,r) = S.splitAt (toIdx p b) b
+    i = toIdx p b
+    (l,r) = S.splitAt i b
     st = State c (l S.>< t S.>< r) cs
     st' = adjustAfter p (length t) st
+
 
 delAdjustCursPos :: (BufIdx,BufIdx) -> Buffer -> CursPos -> CursPos
 delAdjustCursPos r b (CursPos s e) = CursPos (s' s) (f r (fst e))

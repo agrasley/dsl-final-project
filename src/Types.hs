@@ -1,6 +1,5 @@
 module Types where
 
-import Control.Monad.Except
 import qualified Control.Monad.State as St
 import qualified Data.Sequence as S
 
@@ -11,7 +10,7 @@ type CursIdx = Int
 type MaxX   = Int
 type Point  = (Int,Int)
 type CursPt = (BufIdx,MaxX)
-type Eval   = ExceptT String (St.State State)
+type Eval   = St.StateT State IO
 
 data CursPos = CursPos { anchor :: Maybe CursPt, active :: CursPt }
   deriving (Eq,Show)
@@ -48,9 +47,8 @@ instance Ord CursPos where
 
 type Cursor = S.Seq CursPos
 
-
 data State = State {
-    current :: Int,
+    current :: CursIdx,
     buffer  :: Buffer,
     cursors :: S.Seq Cursor
-  }
+  } deriving (Eq,Show)

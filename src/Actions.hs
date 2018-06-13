@@ -62,15 +62,15 @@ delete m = do
 Basic actions
 -}
 
-adjustCursPos :: Pos a => a -> Int -> Buffer -> CursPos -> CursPos
-adjustCursPos p len b (CursPos Nothing (i,maxX))
-  | toIdx p b < i = let j = i+len in CursPos Nothing (j,getX j b)
-  | otherwise     = CursPos Nothing (i,getX i b)
-adjustCursPos p len b (CursPos (Just (i,maxX)) (j,maxX'))
-  | k < i && k < j = CursPos (Just ip') jp'
-  | k < i          = CursPos (Just ip') jp
-  | k < j          = CursPos (Just ip) jp'
-  | otherwise      = CursPos (Just ip) jp
+adjustCursPos :: BufIdx -> Int -> Buffer -> CursPos -> CursPos
+adjustCursPos k len b (CursPos Nothing (i,maxX))
+  | k <= i    = let j = i+len in CursPos Nothing (j,getX j b)
+  | otherwise = CursPos Nothing (i,getX i b)
+adjustCursPos k len b (CursPos (Just (i,maxX)) (j,maxX'))
+  | k <= i && k <= j = CursPos (Just ip') jp'
+  | k <= i           = CursPos (Just ip') jp
+  | k <= j           = CursPos (Just ip) jp'
+  | otherwise        = CursPos (Just ip) jp
     where
       i' = i+len
       ip' = (i',getX i' b)
@@ -78,10 +78,9 @@ adjustCursPos p len b (CursPos (Just (i,maxX)) (j,maxX'))
       j' = j+len
       jp = (j,getX j b)
       jp' = (j',getX j' b)
-      k = toIdx p b
 
-adjustAfter :: BufIdx -> Int -> State -> State
-adjustAfter i len (State c b cs) = State c b (fmap (fmap (adjustCursPos p len b)) cs)
+adjustAfter :: BufIdx -> Int -> Buffer -> S.Seq Cursor -> S.Seq Cursor
+adjustAfter i len b cs = fmap (fmap (adjustCursPos i len b)) cs
 
 insertBuf :: Pos a => [a] -> Text -> Buffer -> Buffer
 insertBuf ps t b = mconcat $ intersperse t bs
@@ -94,17 +93,15 @@ insertBuf ps t b = mconcat $ intersperse t bs
                       (x,y) = S.splitAt i (head bs)
                     in
                       (x:y:tail bs)
-          ) [b] is
+               ) [b] is
 
 
 insertPrim :: Pos a => [a] -> Text -> State -> State
 insertPrim [] _ st = st
-insertPrim (p:ps) t (State c b cs) = insertPrim ps t st'
+insertPrim ps t (State c b cs) = State c b' cs'
   where
-    i = toIdx p b
-    (l,r) = S.splitAt i b
-    st = State c (l S.>< t S.>< r) cs
-    st' = adjustAfter p (length t) st
+    b' = insertBuf ps t b
+    cs' = foldr (\p cs -> adjustAfter (toIdx p b) (S.length t) b cs) cs ps
 
 
 delAdjustCursPos :: (BufIdx,BufIdx) -> Buffer -> CursPos -> CursPos

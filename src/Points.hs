@@ -2,6 +2,7 @@
 
 module Points where
 
+import Debug.Trace
 import Control.Monad.State
 import qualified Data.Sequence as S
 
@@ -47,8 +48,8 @@ idxToPt idx buf = (x,y)
 
 -- | Convert a 2D point to an index of the buffer
 ptToIdx :: Point -> Buffer -> BufIdx
-ptToIdx (x,y) buf | x > end - start = end
-                  | otherwise       = start + x
+ptToIdx (x,y) buf | x > end - start = trace ("end: " ++ show end ++ " start: " ++ show start ++ " x: " ++ show x) $ end
+                  | otherwise       = trace ("end: " ++ show end ++ " start: " ++ show start ++ " x: " ++ show x) $ start + x
   where
     start :: BufIdx
     start = if y == 0 then
@@ -56,7 +57,7 @@ ptToIdx (x,y) buf | x > end - start = end
       else if y >= length newlines then
         last newlines + 1
       else
-        (newlines !! y-1) + 1
+        (newlines !! (y-1)) + 1
 
     end :: BufIdx
     end = if y >= length newlines then

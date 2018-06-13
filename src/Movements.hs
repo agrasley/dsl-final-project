@@ -1,5 +1,6 @@
 module Movements where
 
+import Debug.Trace
 import Control.Monad (when)
 import Control.Monad.State
 import Data.Foldable (toList)
@@ -154,13 +155,6 @@ search = Search
 match :: SDir -> String -> Mvmt
 match = Match
 
-wordStart :: String
-wordStart = "\\W\\b"
-
-wordEnd :: String
-wordEnd = "\\b"
-
-
 movePrim :: CursPt -> Mvmt -> Buffer -> Maybe (CursPt)
 movePrim (idx,maxX) (Move U i) b | y == 0    = Nothing
                                  | y - i < 0 = Just (toIdx ((maxX,0)::Point) b,maxX)
@@ -169,7 +163,7 @@ movePrim (idx,maxX) (Move U i) b | y == 0    = Nothing
                                      y = getY idx b
 movePrim (idx,maxX) (Move D i) b | y == numNl = Nothing
                                  | y+i > numNl = Just (toIdx (maxX,numNl) b,maxX)
-                                 | otherwise   = Just (toIdx (maxX,y+i) b,maxX)
+                                 | otherwise   = trace ("Y: " ++ show (maxX,y+i)) $ Just (toIdx (maxX,y+i) b,maxX)
                                    where
                                      numNl = length $ S.elemIndicesL '\n' b
                                      y = getY idx b
